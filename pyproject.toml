@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "vogelsang-science-reply"
+version = "0.1.0"
+description = ""
+authors = ["Tom Wallis <thomas.wallis@tu-darmstadt.de>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pandas = "^2.2.2"
+pingouin = "^0.5.4"
+seaborn = "^0.13.2"
+ipykernel = "^6.29.4"
+patchworklib = "^0.6.4"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.4.2"
+jupyter-black = "^0.3.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

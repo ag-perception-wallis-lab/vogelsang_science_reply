@@ -1,0 +1,116 @@
+---
+title: "Generalized Mixed Effects Model Analysis"
+output: html_notebook
+---
+
+In this R notebook, we present the re-analysis of data in Vogelsang et al. (2024) using a mixed effects logistic regression model. 
+
+We first load the data and transform it into a long format. We calculate performance in terms of successes and failures to be suitable for a binomial error model. 
+
+```{r}
+library(tidyverse)
+library(readr)
+library(magrittr)
+
+# Construct the file path and read the CSV file
+data <- read_csv("../data/processed_data/experiment1_all_data.csv")
+
+# Transform data to long format and assign a Subject variable to link related data points
+df_long <- data %>%
+  pivot_longer(cols = c("Gray", "Color"), names_to = "ImageType", values_to = "Performance") %>%
+  mutate(Subject = rep(1:(n()/2), each = 2))
+
+# Calculate the number of successes and failures from performance
+df_long <- df_long %>%
+  mutate(Successes = Performance,
+         Failures = 100 - Performance,
+         Group = as.factor(Group),
+         ImageType = as.factor(ImageType),
+         Subject = as.factor(Subject)) %>%
+  select(Group, ImageType, Subject, Successes, Failures)
+
+# View the first few rows with the new columns
+head(df_long)
+```
+
+We now fit the logistic mixed effects model using the lme4 package. We first consider a simple random effects structure where each participant is assigned a random intercept. According to the p-values provided by the summary of the model, the interaction term is not significant (p = 0.1588). However, the p-values provided by lme4 are calculated using Wald tests, which are considered unreliable in small sample sizes (Agresti, 2007).  
+
+```{r}
+library(lme4)
+
+# Fit the mixed-effects logistic regression model
+glmm_model <- glmer(cbind(Successes, Failures) ~ ImageType * Group + (1 | Subject), 
+                    data = df_long, 
+                    family = binomial)
+
+# Summarize the model
+summary(glmm_model)
+```
+A more appropriate test is to calculate significance by comparing the log-likelihood ratios of two models with and without the interaction term. We can do this in R by specifying a null model containing only the main effects and then using the anova function to compare the models. Once again, we find a non-significant result (p = 0.1622) -- the log-likelihood test suggests that the inclusion of the interaction term does not significantly improve the model. In fact, the lower AIC and BIC values suggest that the model without the interaction term is a slightly better fit of the data.
+
+```{r}
+# Fit the model without the interaction term
+glmm_model_null <- glmer(cbind(Successes, Failures) ~ ImageType + Group + (1 | Subject), 
+                    data = df_long, 
+                    family = binomial)
+
+# Perform the log-likelihood ratio test
+anova(glmm_model,glmm_model_null)
+```
+
+While we considered a simple random intercepts model, another more complex model could include a random intercept and a random slope for the effect of image type. We retested this more complex model and once again we find that the interaction term dooes not significantly improve the model (p = 0.727). 
+
+```{r}
+# Fit the model without the interaction term
+glmm_model_slopes <- glmer(cbind(Successes, Failures) ~ ImageType * Group + (1 + ImageType | Subject), 
+                    data = df_long, 
+                    family = binomial)
+# Fit the model without the interaction term
+glmm_model_slopes_null <- glmer(cbind(Successes, Failures) ~ ImageType + Group + (1 + ImageType | Subject), 
+                    data = df_long, 
+                    family = binomial)
+
+anova(glmm_model_slopes,glmm_model_slopes_null)
+```
+We conclude by checking model diagnostics. The plots and tests below suggest no major problems in model fit or the distribution of the data. The  outlier analysis flagged 4 possible influential values. We reran the model without these observations, and still found that the inclusion of the interaction effect does not improve the fit of the model (p = 0.530). Overall, the model appears to be a suitable fit of the data, and our findings are unlikely to be impacted by any underlying violations in model assumptions.
+
+```{r}
+library(performance)
+
+# Check singular fit and overdispersion
+check_singularity(glmm_model_null)
+check_overdispersion(glmm_model_null)
+
+### check model diagnostics
+performance::check_model(glmm_model_null) 
+```
+```{r}
+# Filter out outlier data
+filtered_df_long <- df_long[-c(7, 8, 33, 34), ]
+
+# Fit the model with the interaction term
+glmm_no_outlier <- glmer(cbind(Successes, Failures) ~ ImageType * Group + (1 | Subject), 
+                    data = filtered_df_long, 
+                    family = binomial)
+
+### check model diagnostics
+performance::check_model(glmm_no_outlier) 
+
+# Fit the model without the interaction term
+glmm_no_outlier_null <- glmer(cbind(Successes, Failures) ~ ImageType + Group + (1 | Subject), 
+                    data = filtered_df_long, 
+                    family = binomial)
+
+#Compare the two models
+anova(glmm_no_outlier, glmm_no_outlier_null)
+```
+REFERENCES
+
+Agresti, A. (2006). An introduction to categorical data analysis (2nd ed.). Wiley.
+
+
+
+
+
+
+
