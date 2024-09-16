@@ -1,0 +1,228 @@
+---
+title: "Generalized Mixed Effects Model Analysis"
+output: html_notebook
+---
+
+In this R notebook, we present the re-analysis of data in Vogelsang et al. (2024) using generalized mixed effects models. 
+
+We first load the data and transform it into a long format. We calculate performance in terms of successes and failures to be suitable for a binomial error model. 
+
+```{r}
+# Load libraries
+library(tidyverse)
+library(readr)
+library(magrittr)
+library(performance)
+library(tidyr)
+library(nortest)
+library(dplyr)
+library(broom)
+library(knitr)
+library(kableExtra)
+library(moments)
+library(brms)
+library(bridgesampling)
+library(lme4)
+
+# Read the CSV file
+data <- read_csv("../data/processed_data/experiment1_all_data.csv")
+
+# Transform data to long format and assign a Subject variable to link related data points
+df_long <- data %>%
+  pivot_longer(cols = c("Gray", "Color"), names_to = "ImageType", values_to = "Performance") %>%
+  mutate(Subject = rep(1:(n()/2), each = 2))
+
+# Calculate the number of successes and failures from performance
+df_long <- df_long %>%
+  mutate(Successes = Performance,
+         Failures = 100 - Performance,
+         Group = as.factor(Group),
+         ImageType = as.factor(ImageType),
+         Subject = as.factor(Subject)) %>%
+  dplyr::select(Group, ImageType, Subject, Successes, Failures)
+
+# Make factors sum coding to help with random effect interpretation
+df_long$Group <- as.factor(df_long$Group)
+contrasts(df_long$Group) <- contr.sum
+df_long$ImageType <- as.factor(df_long$ImageType)
+contrasts(df_long$ImageType) <- contr.sum
+
+# View the first few rows with the new columns
+head(df_long)
+```
+
+#### Fitting a Binomial Error Model
+
+We now fit the logistic mixed effects model using the lme4 package. We first consider a simple random effects structure where each participant is assigned a random intercept. According to the p-values provided by the summary of the model, the interaction term is not significant (p = 0.159). However, the p-values provided by lme4 are calculated using Wald tests, which are considered unreliable in small sample sizes (Agresti, 2007).  
+
+```{r}
+# Fit the mixed-effects logistic regression model
+glmm_model <- glmer(cbind(Successes, Failures) ~ ImageType * Group + (1 | Subject), 
+                    data = df_long, 
+                    family = binomial)
+
+# Summarize the model
+summary(glmm_model)
+```
+
+A more appropriate test is to calculate significance by comparing the log-likelihood ratios of two models with and without the interaction term. We can do this in R by specifying a null model containing only the main effects and then using the anova function to compare the models. Once again, we find a non-significant result (p = 0.1622) -- the log-likelihood test suggests that the inclusion of the interaction term does not significantly improve the model. In fact, the lower AIC and BIC values suggest that the model without the interaction term is a slightly better fit of the data.
+
+```{r}
+# Fit the model without the interaction term
+glmm_model_null <- glmer(cbind(Successes, Failures) ~ ImageType + Group + (1 | Subject), 
+                    data = df_long, 
+                    family = binomial)
+
+# Perform the log-likelihood ratio test
+anova(glmm_model,glmm_model_null)
+```
+
+While we considered a simple random intercepts model, another more complex model could include a random intercept and a random slope for the effect of image type. We retested this more complex model and once again we find that the interaction term dooes not significantly improve the model (p = 0.727). 
+
+```{r}
+# Fit the model without the interaction term
+glmm_model_slopes <- glmer(cbind(Successes, Failures) ~ ImageType * Group + (1 + ImageType | Subject), 
+                    data = df_long, 
+                    family ="binomial")
+# Fit the model without the interaction term
+glmm_model_slopes_null <- glmer(cbind(Successes, Failures) ~ ImageType + Group + (1 + ImageType | Subject), 
+                    data = df_long, 
+                    family = "binomial")
+
+anova(glmm_model_slopes,glmm_model_slopes_null)
+```
+
+#### Checking model diagnostics
+
+We conclude by checking model diagnostics. The model converged successfully and there was no singular fit. Other optimizers converged on very similar estimates, suggesting our findings are not specific to a single optimization procedure. The plots and tests below suggest no major problems in model fit or the distribution of the data. The outlier analysis flagged 4 possible influential values. We reran the model without these observations, and still found that the inclusion of the interaction effect does not improve the fit of the model (p = 0.530). Overall, the model appears to be a suitable fit of the data, and our findings are unlikely to be impacted by any underlying violations in model assumptions.
+
+```{r}
+# Check singular fit, optimizer convergence and overdispersion
+af <- allFit(glmm_model_null)
+print(af)
+check_singularity(glmm_model_null)
+check_overdispersion(glmm_model_null)
+
+### check model diagnostics
+performance::check_model(glmm_model_null) 
+```
+# Bayesian approach to testing for an interaction effect
+
+We now try a bayesian approach to see whether it yields a similar finding. We fit two sets of models with different random effect structures (random intercepts only vs. random intercepts and slopes) and compare the Bayes factor of models containing the interaction effect (image condition x group) compared to null models that only model the main effects. We chose a range of sensible priors and evaluated whether the respective models provided evidence for the interaction model or the null model. We found that Bayes factors provided evidence for the null model (ranging from 0.007 to 0.124). 
+
+```{r}
+# Set a seed for reproducibility
+seed_value <- 84
+
+# Define a list of uninformative priors to test
+uninformative_priors <- list(
+  normal_very_wide = "normal(0, 10)",
+  normal_wide = "normal(0, 5)",
+  normal_small_scale = "normal(0, 1)",
+  cauchy_wide = "cauchy(0, 5)"
+)
+
+# Function to fit models with different priors
+fit_models <- function(prior_description, prior, seed) {
+  cat("Testing with prior:", prior_description, "\n")
+  
+  # Fit the full interaction model
+  full_model_int <- brm(
+    Successes | trials(100) ~ ImageType * Group + (1 | Subject),
+    data = df_long,
+    family = binomial(),
+    prior = c(set_prior(prior, class = "b")),
+    chains = 4,
+    cores = 4,
+    seed = seed,
+    save_pars = save_pars(all = TRUE)
+  )
+  
+  # Fit the null interaction model
+  null_model_int <- brm(
+    Successes | trials(100) ~ ImageType + Group + (1 | Subject),
+    data = df_long,
+    family = binomial(),
+    prior = c(set_prior(prior, class = "b")),
+    chains = 4,
+    cores = 4,
+    seed = seed,
+    save_pars = save_pars(all = TRUE)
+  )
+  
+  # Fit the full slope model
+  full_model_slope <- brm(
+    Successes | trials(100) ~ ImageType * Group + (ImageType | Subject),
+    data = df_long,
+    family = binomial(),
+    prior = c(set_prior(prior, class = "b")),
+    chains = 4,
+    cores = 4,
+    seed = seed,
+    save_pars = save_pars(all = TRUE)
+  )
+  
+  # Fit the null slope model
+  null_model_slope <- brm(
+    Successes | trials(100) ~ ImageType + Group + (ImageType | Subject),
+    data = df_long,
+    family = binomial(),
+    prior = c(set_prior(prior, class = "b")),
+    chains = 4,
+    cores = 4,
+    seed = seed,
+    save_pars = save_pars(all = TRUE)
+  )
+  
+  # Compare interaction models using Bayes factors
+  bf_int <- bayes_factor(full_model_int, null_model_int)
+  cat("Bayes Factor for interaction models with prior", prior_description, ":\n")
+  print(bf_int)
+  
+  # Compare slope models using Bayes factors
+  bf_slope <- bayes_factor(full_model_slope, null_model_slope)
+  cat("Bayes Factor for slope models with prior", prior_description, ":\n")
+  print(bf_slope)
+  
+  return(list(
+    full_model_int = full_model_int,
+    null_model_int = null_model_int,
+    full_model_slope = full_model_slope,
+    null_model_slope = null_model_slope,
+    bf_int = bf_int,
+    bf_slope = bf_slope
+  ))
+}
+
+# Iterate over each prior to fit models and compare them
+# Use the same seed for each model to ensure reproducibility
+model_results <- lapply(names(uninformative_priors), function(name) {
+  fit_models(name, uninformative_priors[[name]], seed_value)
+})
+
+# Extract Bayes factors from the model results
+bayes_factors <- data.frame(
+  Prior = names(uninformative_priors),
+  BF_Interaction = sapply(model_results, function(res) res$bf_int$bf),
+  BF_Slope = sapply(model_results, function(res) res$bf_slope$bf)
+)
+
+# Create a neat table using kable
+kable(bayes_factors, 
+      caption = "Bayes Factors for Random Intercepts and Random Slope Models under Different Priors", 
+      col.names = c("Prior", "BF (Interaction Model)", "BF (Slope Model)"),
+      digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) %>%
+  row_spec(0, bold = TRUE)
+
+```
+REFERENCES
+
+Agresti, A. (2006). An introduction to categorical data analysis (2nd ed.). Wiley.
+
+
+
+
+
+
+
