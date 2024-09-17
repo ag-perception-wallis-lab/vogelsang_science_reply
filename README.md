@@ -12,7 +12,7 @@ T. S. A. Wallis & J. M. Martin. (2024, September 17). Still no evidence that lat
 
 ## Directory structure and usage
 
-The two manuscripts for our replies can be found in the publications directory. The code underlying our data analysis can be found in the scripts directory. This consists of two main parts: (1) a transformation plus t-test approach (carried out in a jupyter notebook), and (2) a mixed effects logistic regression (carried out in an R notebook). The raw and processed data files can be found in the data directory.
+The two manuscripts for our replies can be found in the publications directory. The code underlying our data analysis can be found in the scripts directory. This consists of two main parts: (1) a transformation plus t-test approach (carried out in a jupyter notebook), and (2) generalised mixed effects models in both a frequentist and bayesian setting (carried out in an R notebook). The raw and processed data files can be found in the data directory.
 ```shell
 ./vogelsang_science_reply
 ├── README.md
