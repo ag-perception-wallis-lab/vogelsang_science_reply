@@ -6,7 +6,7 @@ Vogelsang, M., Vogelsang, L., Gupta, P., Gandhi, T. K., Shah, P., Swami, P., ...
 
 T. S. A. Wallis & J. M. Martin. (2024, August 16). No evidence that late-sighted individuals rely more on color for object recognition: Reply to Vogelsang et al. _OSF Preprints_. https://osf.io/preprints/psyarxiv/sv4pw 
 
-Vogelsang, M., Vogelsang, L., Gupta, P., Gandhi, T. K., Shah, P., Swami, P., ... & Sinha, P. (2024, September 4). Assessing the impact of color on recognition performance in late-sighted and controls: Response to Thomas Wallis and Joshua Martin. OSF Preprints. https://osf.io/preprints/psyarxiv/upj2d
+Vogelsang, M., Vogelsang, L., Gupta, P., Gandhi, T. K., Shah, P., Swami, P., ... & Sinha, P. (2024, September 4). Assessing the impact of color on recognition performance in late-sighted and controls: Response to Thomas Wallis and Joshua Martin. _OSF Preprints_. https://osf.io/preprints/psyarxiv/upj2d
 
 T. S. A. Wallis & J. M. Martin. (2024, September 17). Still no evidence that late-sighted individuals rely more on color for object recognition: Reply to Vogelsang et al. _OSF Preprints_. https://osf.io/preprints/psyarxiv/d8nvj 
 
